@@ -2,6 +2,7 @@
   "expo": {
     "name": "CS Quest",
     "slug": "cs-quest",
+    "owner": "mashakifalu54s-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
