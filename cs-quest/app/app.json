@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "CS Quest",
+    "slug": "cs-quest",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0f1226",
+    "android": {
+      "package": "com.timothymasha.csquest"
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}
