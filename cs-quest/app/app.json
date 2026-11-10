@@ -10,6 +10,11 @@
     "android": {
       "package": "com.timothymasha.csquest"
     },
-    "plugins": ["expo-secure-store"]
+    "plugins": ["expo-secure-store"],
+    "extra": {
+      "eas": {
+        "projectId": "a7c513c4-85c6-40dc-b792-37e9e000ade3"
+      }
+    }
   }
 }
