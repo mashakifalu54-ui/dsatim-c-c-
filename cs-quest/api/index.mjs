@@ -3,10 +3,39 @@
 // never leaves the server. Zero dependencies: it talks to Postgres over
 // Neon's SQL-over-HTTP endpoint using the built-in fetch.
 
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
 
 const NAIROBI_TODAY = "(now() AT TIME ZONE 'Africa/Nairobi')::date";
 const REPEAT_CORRECT_XP = 2;
+
+// Ranks are earned by completing levels (a level counts once you have at least 1 star).
+const RANKS = [
+  { title: 'Rookie', icon: '🌱', minLevels: 0 },
+  { title: 'Apprentice', icon: '🔧', minLevels: 3 },
+  { title: 'Coder', icon: '💻', minLevels: 8 },
+  { title: 'Debugger', icon: '🐞', minLevels: 15 },
+  { title: 'Developer', icon: '🚀', minLevels: 25 },
+  { title: 'Engineer', icon: '⚙️', minLevels: 38 },
+  { title: 'Architect', icon: '🏛️', minLevels: 52 },
+  { title: 'Grandmaster', icon: '👑', minLevels: 68 },
+];
+
+export function rankForLevels(levelsCompleted) {
+  let currentRank = RANKS[0];
+  for (const rank of RANKS) if (levelsCompleted >= rank.minLevels) currentRank = rank;
+  const nextRank = RANKS[RANKS.indexOf(currentRank) + 1] ?? null;
+  return {
+    title: currentRank.title,
+    icon: currentRank.icon,
+    minLevels: currentRank.minLevels,
+    next: nextRank ? { title: nextRank.title, icon: nextRank.icon, minLevels: nextRank.minLevels } : null,
+  };
+}
+
+const COMMENT_MAX_LENGTH = 300;
+const COMMENT_COOLDOWN_SECONDS = 10;
+const COMMENTS_PER_DAY = 30;
+const REPORTS_TO_HIDE = 3;
 
 // ---------- database helper ----------
 
@@ -68,7 +97,7 @@ async function runQuery(queryText, queryParams = []) {
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'content-type, x-player-token',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
 };
 
 function jsonResponse(responseBody, statusCode = 200) {
@@ -89,6 +118,31 @@ function hashToken(playerToken) {
   return createHash('sha256').update(playerToken).digest('hex');
 }
 
+function hashPassword(password) {
+  const salt = randomBytes(16).toString('hex');
+  return `${salt}:${scryptSync(password, salt, 64).toString('hex')}`;
+}
+
+function passwordMatches(password, storedHash) {
+  const [salt, expectedHex] = String(storedHash ?? '').split(':');
+  if (!salt || !expectedHex) return false;
+  const expected = Buffer.from(expectedHex, 'hex');
+  const actual = scryptSync(password, salt, expected.length);
+  return timingSafeEqual(actual, expected);
+}
+
+export function validateCredentials(requestBody) {
+  const username = String(requestBody.username ?? '').trim();
+  const password = String(requestBody.password ?? '');
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) {
+    throw new ApiError(400, 'Username must be 3-20 letters, numbers or underscores');
+  }
+  if (password.length < 6 || password.length > 100) {
+    throw new ApiError(400, 'Password must be at least 6 characters');
+  }
+  return { username, password };
+}
+
 async function readJsonBody(request) {
   try {
     return await request.json();
@@ -104,8 +158,13 @@ async function requirePlayer(request) {
   const playerRows = await runQuery(
     `SELECT player_id, display_name, total_xp, current_streak, longest_streak, lives,
             (last_played_date = ${NAIROBI_TODAY}) AS played_today,
-            (last_played_date >= ${NAIROBI_TODAY} - 1) AS streak_alive
-       FROM players WHERE token_hash = $1`,
+            (last_played_date >= ${NAIROBI_TODAY} - 1) AS streak_alive,
+            username, password_hash,
+            (SELECT COUNT(*) FROM level_progress
+              WHERE level_progress.player_id = players.player_id AND level_progress.stars >= 1)::int AS levels_completed
+       FROM players
+      WHERE token_hash = $1
+         OR player_id IN (SELECT player_id FROM sessions WHERE token_hash = $1)`,
     [hashToken(playerToken)],
   );
   if (playerRows.length === 0) throw new ApiError(401, 'Unknown player token');
@@ -113,8 +172,13 @@ async function requirePlayer(request) {
 }
 
 function toPlayerJson(playerRow) {
+  const levelsCompleted = playerRow.levels_completed ?? 0;
   return {
     displayName: playerRow.display_name,
+    username: playerRow.username ?? null,
+    hasAccount: Boolean(playerRow.username),
+    levelsCompleted,
+    rank: rankForLevels(levelsCompleted),
     totalXp: playerRow.total_xp,
     // A streak only counts if the player played today or yesterday.
     currentStreak: playerRow.streak_alive ? playerRow.current_streak : 0,
@@ -143,19 +207,110 @@ export function starsForScore(correctCount, totalCount) {
 
 // ---------- route handlers ----------
 
-async function createPlayer(request) {
-  const requestBody = await readJsonBody(request);
-  const displayName = String(requestBody.displayName ?? '').trim().slice(0, 30);
-  if (displayName.length < 2) throw new ApiError(400, 'Name must be at least 2 characters');
+async function startSession(playerId) {
+  const sessionToken = randomUUID() + randomUUID();
+  await runQuery('INSERT INTO sessions (token_hash, player_id) VALUES ($1, $2)', [hashToken(sessionToken), playerId]);
+  return sessionToken;
+}
 
-  const playerToken = randomUUID() + randomUUID();
+async function loadPlayerById(playerId) {
   const playerRows = await runQuery(
-    `INSERT INTO players (display_name, token_hash) VALUES ($1, $2)
-     RETURNING player_id, display_name, total_xp, current_streak, longest_streak, lives,
-               FALSE AS played_today, FALSE AS streak_alive`,
-    [displayName, hashToken(playerToken)],
+    `SELECT player_id, display_name, total_xp, current_streak, longest_streak, lives, username,
+            (last_played_date = ${NAIROBI_TODAY}) AS played_today,
+            (last_played_date >= ${NAIROBI_TODAY} - 1) AS streak_alive,
+            (SELECT COUNT(*) FROM level_progress
+              WHERE level_progress.player_id = players.player_id AND level_progress.stars >= 1)::int AS levels_completed
+       FROM players WHERE player_id = $1`,
+    [playerId],
   );
-  return jsonResponse({ token: playerToken, player: toPlayerJson(playerRows[0]) }, 201);
+  return playerRows[0];
+}
+
+function rethrowIfUsernameTaken(error) {
+  if (String(error.message).includes('players_username_unique')) throw new ApiError(409, 'That username is taken');
+  throw error;
+}
+
+async function signUp(request) {
+  const { username, password } = validateCredentials(await readJsonBody(request));
+  let newPlayerRows;
+  try {
+    newPlayerRows = await runQuery(
+      `INSERT INTO players (display_name, username, password_hash, token_hash)
+       VALUES ($1, $1, $2, $3) RETURNING player_id`,
+      [username, hashPassword(password), hashToken(randomUUID())],
+    );
+  } catch (error) {
+    rethrowIfUsernameTaken(error);
+  }
+  const playerId = newPlayerRows[0].player_id;
+  const sessionToken = await startSession(playerId);
+  return jsonResponse({ token: sessionToken, player: toPlayerJson(await loadPlayerById(playerId)) }, 201);
+}
+
+async function logIn(request) {
+  const requestBody = await readJsonBody(request);
+  const username = String(requestBody.username ?? '').trim();
+  const password = String(requestBody.password ?? '');
+  const playerRows = await runQuery('SELECT player_id, password_hash FROM players WHERE lower(username) = lower($1)', [username]);
+  // Same message for "no such user" and "wrong password", so usernames can't be probed.
+  if (playerRows.length === 0 || !passwordMatches(password, playerRows[0].password_hash)) {
+    throw new ApiError(401, 'Wrong username or password');
+  }
+  const playerId = playerRows[0].player_id;
+  const sessionToken = await startSession(playerId);
+  return jsonResponse({ token: sessionToken, player: toPlayerJson(await loadPlayerById(playerId)) });
+}
+
+// An older player who started before accounts existed adds a username and password,
+// and keeps all their XP and stars.
+async function claimAccount(player, request) {
+  if (player.username) throw new ApiError(409, 'This player already has an account');
+  const { username, password } = validateCredentials(await readJsonBody(request));
+  try {
+    await runQuery(
+      'UPDATE players SET username = $2, display_name = $2, password_hash = $3 WHERE player_id = $1 AND username IS NULL',
+      [player.player_id, username, hashPassword(password)],
+    );
+  } catch (error) {
+    rethrowIfUsernameTaken(error);
+  }
+  return jsonResponse({ player: toPlayerJson(await loadPlayerById(player.player_id)) });
+}
+
+async function logOut(request) {
+  const sessionToken = request.headers.get('x-player-token');
+  await runQuery('DELETE FROM sessions WHERE token_hash = $1', [hashToken(sessionToken)]);
+  return jsonResponse({ ok: true });
+}
+
+async function leaderboard(player) {
+  const boardRows = await runQuery(
+    `WITH board AS (
+       SELECT players.player_id, players.username, players.total_xp,
+              COUNT(level_progress.level_id) FILTER (WHERE level_progress.stars >= 1)::int AS levels_completed,
+              COALESCE(SUM(level_progress.stars), 0)::int AS total_stars
+         FROM players
+         LEFT JOIN level_progress ON level_progress.player_id = players.player_id
+        WHERE players.username IS NOT NULL
+        GROUP BY players.player_id
+     ), ranked AS (
+       SELECT board.*, ROW_NUMBER() OVER (ORDER BY levels_completed DESC, total_stars DESC, total_xp DESC, player_id) AS position
+         FROM board
+     )
+     SELECT * FROM ranked WHERE position <= 50 OR player_id = $1 ORDER BY position`,
+    [player.player_id],
+  );
+  const toEntry = (boardRow) => ({
+    position: boardRow.position,
+    username: boardRow.username,
+    levelsCompleted: boardRow.levels_completed,
+    totalStars: boardRow.total_stars,
+    totalXp: boardRow.total_xp,
+    rank: rankForLevels(boardRow.levels_completed),
+    isMe: boardRow.player_id === player.player_id,
+  });
+  return jsonResponse({ entries: boardRows.map(toEntry) });
 }
 
 async function listWorlds(player) {
@@ -188,7 +343,7 @@ async function listWorlds(player) {
 async function listLevels(player, worldSlug) {
   const levelRows = await runQuery(
     `SELECT levels.level_id, levels.title, levels.level_order, levels.is_boss,
-            levels.time_limit_seconds,
+            levels.time_limit_seconds, levels.notes,
             (SELECT COUNT(*) FROM questions WHERE questions.level_id = levels.level_id)::int AS question_count,
             COALESCE(level_progress.best_score, 0) AS best_score,
             COALESCE(level_progress.stars, 0) AS stars
@@ -211,6 +366,7 @@ async function listLevels(player, worldSlug) {
       levelOrder: levelRow.level_order,
       isBoss: levelRow.is_boss,
       timeLimitSeconds: levelRow.time_limit_seconds,
+      notes: levelRow.notes,
       questionCount: levelRow.question_count,
       bestScore: levelRow.best_score,
       stars: levelRow.stars,
@@ -346,7 +502,17 @@ async function completeLevel(player, levelId, request) {
   );
   const result = resultRows[0];
 
+  const completedRows = await runQuery(
+    'SELECT COUNT(*)::int AS levels_completed FROM level_progress WHERE player_id = $1 AND stars >= 1',
+    [player.player_id],
+  );
+  const levelsCompleted = completedRows[0].levels_completed;
+  const newRank = rankForLevels(levelsCompleted);
+
   return jsonResponse({
+    levelsCompleted,
+    rank: newRank,
+    rankedUp: newRank.title !== rankForLevels(player.levels_completed).title,
     correctCount,
     totalCount,
     stars,
@@ -356,6 +522,113 @@ async function completeLevel(player, levelId, request) {
     longestStreak: result.longest_streak,
     totalXp: result.total_xp,
   });
+}
+
+// ---------- community ----------
+
+// Comments are only visible to (and writable by) players who have played that level,
+// so nobody gets answers spoiled before they try it.
+async function requirePlayedLevel(player, levelId) {
+  const playedRows = await runQuery(
+    'SELECT 1 FROM level_progress WHERE player_id = $1 AND level_id = $2',
+    [player.player_id, levelId],
+  );
+  if (playedRows.length === 0) throw new ApiError(403, 'Finish this level to see and post comments');
+}
+
+function toCommentJson(commentRow, player) {
+  return {
+    commentId: commentRow.comment_id,
+    username: commentRow.username,
+    rank: rankForLevels(commentRow.levels_completed),
+    body: commentRow.body,
+    createdAt: commentRow.created_at,
+    isMine: commentRow.player_id === player.player_id,
+    levelTitle: commentRow.level_title ?? undefined,
+    worldTitle: commentRow.world_title ?? undefined,
+    levelId: commentRow.level_id,
+  };
+}
+
+const COMMENT_COLUMNS = `comments.comment_id, comments.player_id, comments.level_id, comments.body,
+       to_char(comments.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+       players.username,
+       (SELECT COUNT(*) FROM level_progress
+         WHERE level_progress.player_id = comments.player_id AND level_progress.stars >= 1)::int AS levels_completed`;
+
+async function listComments(player, levelId) {
+  await requirePlayedLevel(player, levelId);
+  const commentRows = await runQuery(
+    `SELECT ${COMMENT_COLUMNS}
+       FROM comments JOIN players ON players.player_id = comments.player_id
+      WHERE comments.level_id = $1 AND NOT comments.is_hidden
+      ORDER BY comments.created_at DESC LIMIT 50`,
+    [levelId],
+  );
+  return jsonResponse({ comments: commentRows.map((commentRow) => toCommentJson(commentRow, player)) });
+}
+
+async function postComment(player, levelId, request) {
+  if (!player.username) throw new ApiError(403, 'Create an account to post comments');
+  await requirePlayedLevel(player, levelId);
+  const requestBody = await readJsonBody(request);
+  const body = String(requestBody.body ?? '').trim().replace(/\s+\n/g, '\n');
+  if (body.length === 0) throw new ApiError(400, 'Write something first');
+  if (body.length > COMMENT_MAX_LENGTH) throw new ApiError(400, `Comments can be up to ${COMMENT_MAX_LENGTH} characters`);
+
+  const recentRows = await runQuery(
+    `SELECT COUNT(*) FILTER (WHERE created_at > now() - interval '${COMMENT_COOLDOWN_SECONDS} seconds')::int AS just_now,
+            COUNT(*) FILTER (WHERE created_at > now() - interval '1 day')::int AS today
+       FROM comments WHERE player_id = $1`,
+    [player.player_id],
+  );
+  if (recentRows[0].just_now > 0) throw new ApiError(429, 'Slow down a little, then try again');
+  if (recentRows[0].today >= COMMENTS_PER_DAY) throw new ApiError(429, 'Daily comment limit reached');
+
+  await runQuery('INSERT INTO comments (level_id, player_id, body) VALUES ($1, $2, $3)', [levelId, player.player_id, body]);
+  return listComments(player, levelId);
+}
+
+async function deleteComment(player, commentId) {
+  const deletedRows = await runQuery(
+    'DELETE FROM comments WHERE comment_id = $1 AND player_id = $2 RETURNING comment_id',
+    [commentId, player.player_id],
+  );
+  if (deletedRows.length === 0) throw new ApiError(404, 'Comment not found');
+  return jsonResponse({ ok: true });
+}
+
+async function reportComment(player, commentId) {
+  const commentRows = await runQuery('SELECT player_id FROM comments WHERE comment_id = $1', [commentId]);
+  if (commentRows.length === 0) throw new ApiError(404, 'Comment not found');
+  if (commentRows[0].player_id === player.player_id) throw new ApiError(400, 'You cannot report your own comment');
+  await runQuery(
+    'INSERT INTO comment_reports (comment_id, reporter_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [commentId, player.player_id],
+  );
+  // Enough different players reporting a comment hides it until someone reviews it.
+  await runQuery(
+    `UPDATE comments SET is_hidden = TRUE
+      WHERE comment_id = $1 AND (SELECT COUNT(*) FROM comment_reports WHERE comment_id = $1) >= ${REPORTS_TO_HIDE}`,
+    [commentId],
+  );
+  return jsonResponse({ ok: true });
+}
+
+async function communityFeed(player) {
+  const commentRows = await runQuery(
+    `SELECT ${COMMENT_COLUMNS}, levels.title AS level_title, worlds.title AS world_title
+       FROM comments
+       JOIN players ON players.player_id = comments.player_id
+       JOIN levels ON levels.level_id = comments.level_id
+       JOIN worlds ON worlds.world_id = levels.world_id
+      WHERE NOT comments.is_hidden
+        AND EXISTS (SELECT 1 FROM level_progress
+                     WHERE level_progress.player_id = $1 AND level_progress.level_id = comments.level_id)
+      ORDER BY comments.created_at DESC LIMIT 40`,
+    [player.player_id],
+  );
+  return jsonResponse({ comments: commentRows.map((commentRow) => toCommentJson(commentRow, player)) });
 }
 
 // ---------- router ----------
@@ -372,11 +645,16 @@ async function routeRequest(request) {
     const countRows = await runQuery('SELECT COUNT(*)::int AS question_count FROM questions');
     return jsonResponse({ status: 'ok', questionCount: countRows[0].question_count });
   }
-  if (routeKey === 'POST /players') return createPlayer(request);
+  if (routeKey === 'POST /auth/signup') return signUp(request);
+  if (routeKey === 'POST /auth/login') return logIn(request);
 
   const player = await requirePlayer(request);
 
   if (routeKey === 'GET /me') return jsonResponse({ player: toPlayerJson(player) });
+  if (routeKey === 'POST /auth/claim') return claimAccount(player, request);
+  if (routeKey === 'POST /auth/logout') return logOut(request);
+  if (routeKey === 'GET /leaderboard') return leaderboard(player);
+  if (routeKey === 'GET /community/feed') return communityFeed(player);
   if (routeKey === 'GET /worlds') return listWorlds(player);
   if (routeKey === 'POST /answers') return submitAnswer(player, request);
 
@@ -396,6 +674,16 @@ async function routeRequest(request) {
     }
     if (request.method === 'GET' && resourceName === 'questions' && actionName === 'reveal') {
       return revealAnswer(numericId);
+    }
+    if (resourceName === 'levels' && actionName === 'comments') {
+      if (request.method === 'GET') return listComments(player, numericId);
+      if (request.method === 'POST') return postComment(player, numericId, request);
+    }
+    if (resourceName === 'comments' && request.method === 'DELETE' && !actionName) {
+      return deleteComment(player, numericId);
+    }
+    if (resourceName === 'comments' && request.method === 'POST' && actionName === 'report') {
+      return reportComment(player, numericId);
     }
   }
 

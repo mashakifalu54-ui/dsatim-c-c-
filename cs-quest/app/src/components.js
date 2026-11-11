@@ -84,6 +84,69 @@ export function StarRow({ stars, size = 18 }) {
   );
 }
 
+// Renders level notes. Lines starting with "## " are headings, "• " are bullets.
+export function NotesText({ notes }) {
+  const noteLines = String(notes ?? '').split('\n').filter((noteLine) => noteLine.trim().length > 0);
+  return (
+    <View style={styles.notesBox}>
+      {noteLines.map((noteLine, lineIndex) => {
+        if (noteLine.startsWith('## ')) {
+          return (
+            <Text key={lineIndex} style={styles.notesHeading}>
+              {noteLine.slice(3)}
+            </Text>
+          );
+        }
+        if (noteLine.startsWith('• ')) {
+          return (
+            <View key={lineIndex} style={styles.notesBulletRow}>
+              <Text style={styles.notesBulletDot}>•</Text>
+              <Text style={styles.notesText}>{noteLine.slice(2)}</Text>
+            </View>
+          );
+        }
+        return (
+          <Text key={lineIndex} style={styles.notesText}>
+            {noteLine}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
+export function RankBadge({ rank, compact = false }) {
+  if (!rank) return null;
+  return (
+    <View style={[styles.rankBadge, compact && styles.rankBadgeCompact]}>
+      <Text style={compact ? styles.rankIconCompact : styles.rankIcon}>{rank.icon}</Text>
+      <Text style={[styles.rankTitle, compact && styles.rankTitleCompact]}>{rank.title}</Text>
+    </View>
+  );
+}
+
+const TABS = [
+  { screenName: 'Home', icon: '🗺️', label: 'Quests' },
+  { screenName: 'Community', icon: '💬', label: 'Community' },
+  { screenName: 'Profile', icon: '👤', label: 'Profile' },
+];
+
+export function TabBar({ activeScreen, onSelect }) {
+  return (
+    <View style={styles.tabBar}>
+      {TABS.map((tab) => {
+        const isActive = tab.screenName === activeScreen;
+        return (
+          <Pressable key={tab.screenName} style={styles.tabButton} onPress={() => onSelect(tab.screenName)}>
+            <Text style={[styles.tabIcon, !isActive && styles.tabInactive]}>{tab.icon}</Text>
+            <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>{tab.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   button: {
     paddingVertical: 14,
@@ -124,4 +187,45 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   progressTrack: { backgroundColor: colors.locked, overflow: 'hidden' },
+  notesBox: {
+    backgroundColor: colors.card,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: spacing.medium,
+    gap: 6,
+  },
+  notesHeading: { color: colors.gold, fontSize: 15, fontWeight: '900', marginTop: 6, letterSpacing: 0.3 },
+  notesBulletRow: { flexDirection: 'row', gap: 8 },
+  notesBulletDot: { color: colors.primary, fontSize: 15, lineHeight: 22, fontWeight: '900' },
+  notesText: { color: colors.text, fontSize: 15, lineHeight: 22, flex: 1 },
+  rankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#2a2160',
+    borderColor: colors.primary,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  rankBadgeCompact: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, gap: 3 },
+  rankIcon: { fontSize: 16 },
+  rankIconCompact: { fontSize: 11 },
+  rankTitle: { color: colors.text, fontWeight: '800', fontSize: 13 },
+  rankTitleCompact: { fontSize: 11 },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderTopColor: colors.cardBorder,
+    borderTopWidth: 1,
+    paddingVertical: 6,
+  },
+  tabButton: { flex: 1, alignItems: 'center', paddingVertical: 4 },
+  tabIcon: { fontSize: 22 },
+  tabInactive: { opacity: 0.45 },
+  tabLabel: { color: colors.mutedText, fontSize: 11, fontWeight: '700', marginTop: 2 },
+  tabLabelActive: { color: colors.gold },
 });

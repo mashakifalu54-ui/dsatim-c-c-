@@ -33,9 +33,26 @@ async function sendRequest(path, { method = 'GET', body } = {}) {
   return responseBody;
 }
 
-export function createPlayer(displayName) {
-  return sendRequest('/players', { method: 'POST', body: { displayName } });
+// ---------- accounts ----------
+
+export function signUp(username, password) {
+  return sendRequest('/auth/signup', { method: 'POST', body: { username, password } });
 }
+
+export function logIn(username, password) {
+  return sendRequest('/auth/login', { method: 'POST', body: { username, password } });
+}
+
+// For players who started before accounts existed: keeps their XP and stars.
+export async function claimAccount(username, password) {
+  return (await sendRequest('/auth/claim', { method: 'POST', body: { username, password } })).player;
+}
+
+export function logOut() {
+  return sendRequest('/auth/logout', { method: 'POST' });
+}
+
+// ---------- game ----------
 
 export async function fetchPlayer() {
   return (await sendRequest('/me')).player;
@@ -66,4 +83,30 @@ export function submitAnswer({ questionId, givenAnswer, selfGradedCorrect }) {
 
 export function completeLevel(levelId, correctCount) {
   return sendRequest(`/levels/${levelId}/complete`, { method: 'POST', body: { correctCount } });
+}
+
+// ---------- community ----------
+
+export async function fetchLeaderboard() {
+  return (await sendRequest('/leaderboard')).entries;
+}
+
+export async function fetchCommunityFeed() {
+  return (await sendRequest('/community/feed')).comments;
+}
+
+export async function fetchComments(levelId) {
+  return (await sendRequest(`/levels/${levelId}/comments`)).comments;
+}
+
+export async function postComment(levelId, body) {
+  return (await sendRequest(`/levels/${levelId}/comments`, { method: 'POST', body: { body } })).comments;
+}
+
+export function deleteComment(commentId) {
+  return sendRequest(`/comments/${commentId}`, { method: 'DELETE' });
+}
+
+export function reportComment(commentId) {
+  return sendRequest(`/comments/${commentId}/report`, { method: 'POST' });
 }

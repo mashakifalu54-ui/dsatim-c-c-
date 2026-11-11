@@ -76,3 +76,34 @@ SELECT attempts.player_id,
   JOIN levels ON levels.level_id = questions.level_id
  GROUP BY attempts.player_id, questions.question_id, questions.prompt, levels.title
 HAVING COUNT(*) FILTER (WHERE NOT attempts.is_correct) > 0;
+
+-- ---------- added in v1.2: accounts, notes, community ----------
+
+ALTER TABLE players ADD COLUMN username TEXT, ADD COLUMN password_hash TEXT;  -- scrypt "salt:hash"
+CREATE UNIQUE INDEX players_username_unique ON players (lower(username));
+
+-- One row per logged-in device.
+CREATE TABLE sessions (
+  token_hash TEXT PRIMARY KEY,  -- SHA-256 of the token stored on the phone
+  player_id INT NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE levels ADD COLUMN notes TEXT;  -- "## " headings and "• " bullets
+
+CREATE TABLE comments (
+  comment_id SERIAL PRIMARY KEY,
+  level_id INT NOT NULL REFERENCES levels(level_id) ON DELETE CASCADE,
+  player_id INT NOT NULL REFERENCES players(player_id) ON DELETE CASCADE,
+  body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 300),
+  is_hidden BOOLEAN DEFAULT FALSE,  -- set after 3 reports
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX comments_level_idx ON comments (level_id, created_at DESC);
+
+CREATE TABLE comment_reports (
+  comment_id INT REFERENCES comments(comment_id) ON DELETE CASCADE,
+  reporter_id INT REFERENCES players(player_id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (comment_id, reporter_id)
+);

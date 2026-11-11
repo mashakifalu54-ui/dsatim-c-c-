@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInpu
 
 import { completeLevel, fetchQuestions, revealAnswer, submitAnswer } from '../api';
 import { ErrorView, LoadingView, PrimaryButton, ProgressBar, ScreenHeader } from '../components';
+import { playSound } from '../sound';
 import { colors, spacing } from '../theme';
 
 export default function QuizScreen({ navigation, params }) {
@@ -64,6 +65,7 @@ export default function QuizScreen({ navigation, params }) {
 
   function recordVerdict(verdict) {
     setFeedback(verdict);
+    playSound(verdict.isCorrect ? 'correct' : 'wrong');
     if (verdict.isCorrect) setCorrectCount((previousCount) => previousCount + 1);
     setXpEarnedThisRun((previousXp) => previousXp + verdict.xpEarned);
   }
@@ -120,7 +122,10 @@ export default function QuizScreen({ navigation, params }) {
           <Pressable
             key={optionText}
             disabled={feedback !== null}
-            onPress={() => setSelectedOption(optionText)}
+            onPress={() => {
+              playSound('tap');
+              setSelectedOption(optionText);
+            }}
             style={[
               styles.optionButton,
               isSelected && styles.optionSelected,

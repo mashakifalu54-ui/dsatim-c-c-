@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { fetchPlayer, fetchWorlds } from '../api';
-import { ErrorView, LoadingView, ProgressBar } from '../components';
+import { ErrorView, LoadingView, ProgressBar, RankBadge } from '../components';
+import { playSound } from '../sound';
 import { colors, spacing } from '../theme';
 
-const WORLD_ICONS = { os: '🖥️', arch: '⚙️', web: '🌐', sql: '🗄️', dsa: '⛰️', net: '📡' };
+export const WORLD_ICONS = { os: '🖥️', arch: '⚙️', web: '🌐', sql: '🗄️', dsa: '⛰️', net: '📡', maths: '📐' };
 
 export default function HomeScreen({ navigation }) {
   const [player, setPlayer] = useState(null);
@@ -47,7 +48,10 @@ export default function HomeScreen({ navigation }) {
     return (
       <Pressable
         style={({ pressed }) => [styles.worldCard, pressed && styles.worldCardPressed]}
-        onPress={() => navigation.push('World', { worldSlug: world.slug, worldTitle: world.title })}
+        onPress={() => {
+          playSound('tap');
+          navigation.push('World', { worldSlug: world.slug, worldTitle: world.title });
+        }}
       >
         <View style={styles.worldIconCircle}>
           <Text style={styles.worldIcon}>{WORLD_ICONS[world.slug] ?? '📘'}</Text>
@@ -69,7 +73,7 @@ export default function HomeScreen({ navigation }) {
     );
   }
 
-  const playerInitial = (player.displayName || '?').trim().charAt(0).toUpperCase();
+  const playerInitial = (player.username || player.displayName || '?').trim().charAt(0).toUpperCase();
 
   return (
     <FlatList
@@ -86,9 +90,9 @@ export default function HomeScreen({ navigation }) {
             </View>
             <View style={styles.profileText}>
               <Text style={styles.greeting} numberOfLines={1}>
-                Hey, {player.displayName}!
+                Hey, {player.username ?? player.displayName}!
               </Text>
-              <Text style={styles.tagline}>Learn. Play. Level up.</Text>
+              <RankBadge rank={player.rank} />
             </View>
           </View>
           <View style={styles.statsRow}>
@@ -127,7 +131,7 @@ const styles = StyleSheet.create({
   },
   avatarLetter: { color: colors.text, fontSize: 26, fontWeight: '900' },
   profileText: { flex: 1 },
-  greeting: { color: colors.text, fontSize: 24, fontWeight: '900' },
+  greeting: { color: colors.text, fontSize: 24, fontWeight: '900', marginBottom: 4 },
   tagline: { color: colors.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
   statsRow: { flexDirection: 'row', gap: spacing.small, marginTop: spacing.medium },
   statBox: {

@@ -1,0 +1,14 @@
+# Publishes the app's latest JavaScript, screens and sounds as an in-app update.
+# Phones running a build with the same app version download it on their next launch.
+# Native changes (new native libraries, permissions, icon) still need a new APK build
+# and a "version" bump in app.json.
+name: Publish app update
+
+jobs:
+  publish_update:
+    name: Publish update to the preview channel
+    type: update
+    environment: preview
+    params:
+      channel: preview
+      platform: android

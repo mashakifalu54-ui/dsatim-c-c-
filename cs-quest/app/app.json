@@ -3,7 +3,7 @@
     "name": "CS Quest",
     "slug": "cs-quest",
     "owner": "mashakifalu54s-team",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0f1226",
@@ -16,11 +16,29 @@
         "backgroundColor": "#5a3fd6"
       }
     },
-    "plugins": ["expo-secure-store"],
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "a7c513c4-85c6-40dc-b792-37e9e000ade3"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a7c513c4-85c6-40dc-b792-37e9e000ade3",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { fetchLevels } from '../api';
 import { ErrorView, LoadingView, ScreenHeader, StarRow } from '../components';
+import { playSound } from '../sound';
 import { colors, spacing } from '../theme';
 
 export default function WorldScreen({ navigation, params }) {
@@ -27,7 +28,9 @@ export default function WorldScreen({ navigation, params }) {
   }, [loadLevels]);
 
   function openLevel(level) {
-    navigation.push('Quiz', { level, worldSlug, worldTitle });
+    playSound('tap');
+    // Every level opens with its notes; the quiz starts from there.
+    navigation.push('Notes', { level, worldSlug, worldTitle });
   }
 
   let body;

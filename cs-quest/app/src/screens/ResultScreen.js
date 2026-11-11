@@ -1,6 +1,9 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import CommentsSection from '../CommentsSection';
 import { PrimaryButton, StarRow } from '../components';
+import { playSound } from '../sound';
 import { colors, spacing } from '../theme';
 
 const HEADLINES = ['Keep practising!', 'Level passed!', 'Great work!', 'Perfect run!'];
@@ -8,14 +11,29 @@ const HEADLINES = ['Keep practising!', 'Level passed!', 'Great work!', 'Perfect 
 export default function ResultScreen({ navigation, params }) {
   const { level, worldSlug, worldTitle, levelResult, xpEarned } = params;
   const passedLevel = levelResult.stars >= 1;
+  const rankedUp = levelResult.rankedUp === true;
+
+  useEffect(() => {
+    playSound(rankedUp ? 'rankup' : passedLevel ? 'complete' : 'fail');
+  }, [rankedUp, passedLevel]);
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.trophy}>{passedLevel ? '🏆' : '💪'}</Text>
       <Text style={styles.completeLabel}>{passedLevel ? 'LEVEL COMPLETE!' : 'NOT YET…'}</Text>
       <Text style={styles.headline}>{HEADLINES[levelResult.stars]}</Text>
       <Text style={styles.levelTitle}>{level.title}</Text>
       <StarRow stars={levelResult.stars} size={44} />
+
+      {rankedUp && levelResult.rank ? (
+        <View style={styles.rankUpBanner}>
+          <Text style={styles.rankUpIcon}>{levelResult.rank.icon}</Text>
+          <View style={styles.rankUpText}>
+            <Text style={styles.rankUpLabel}>RANK UP!</Text>
+            <Text style={styles.rankUpTitle}>You reached {levelResult.rank.title}</Text>
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
@@ -46,16 +64,36 @@ export default function ResultScreen({ navigation, params }) {
           onPress={() => navigation.replace('Quiz', { level, worldSlug, worldTitle })}
         />
       </View>
-    </View>
+
+      <View style={styles.commentsArea}>
+        <CommentsSection levelId={level.levelId} />
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.large, gap: spacing.small },
-  trophy: { fontSize: 72 },
+  container: { alignItems: 'center', padding: spacing.large, gap: spacing.small, paddingBottom: spacing.large * 2 },
+  trophy: { fontSize: 72, marginTop: spacing.large },
   completeLabel: { color: colors.gold, fontSize: 14, fontWeight: '900', letterSpacing: 2 },
   headline: { color: colors.text, fontSize: 32, fontWeight: '900' },
   levelTitle: { color: colors.mutedText, fontSize: 16, marginBottom: spacing.small },
+  rankUpBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    gap: spacing.medium,
+    backgroundColor: '#2a2160',
+    borderColor: colors.gold,
+    borderWidth: 2,
+    borderRadius: 18,
+    padding: spacing.medium,
+    marginTop: spacing.medium,
+  },
+  rankUpIcon: { fontSize: 40 },
+  rankUpText: { flex: 1 },
+  rankUpLabel: { color: colors.gold, fontWeight: '900', letterSpacing: 2, fontSize: 13 },
+  rankUpTitle: { color: colors.text, fontWeight: '900', fontSize: 18 },
   // alignSelf stretch: the parent centres its children, so without it the row shrinks and squeezes the boxes.
   statsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: spacing.small, marginTop: spacing.large },
   statBox: {
@@ -71,4 +109,5 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.mutedText, fontSize: 12, marginTop: 2 },
   hint: { color: colors.mutedText, textAlign: 'center', marginTop: spacing.medium },
   buttons: { alignSelf: 'stretch', gap: spacing.small, marginTop: spacing.large },
+  commentsArea: { alignSelf: 'stretch', marginTop: spacing.large },
 });
