@@ -1,6 +1,6 @@
 // Terms and Privacy text shown at sign-up. Plain-language drafts: have a lawyer review before wide public release.
 export const LEGAL_VERSION = '2026-11-12';
-export const CONTACT_LINE = 'Timothy Masha, Kilifi, Kenya (use the Community page to reach the developer).';
+export const CONTACT_LINE = 'Timothy Masha, Kilifi, Kenya. Email: mashakifalu54@gmail.com';
 
 export const TERMS_SECTIONS = [
   {
