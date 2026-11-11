@@ -32,6 +32,12 @@ Android app (Expo)  --->  API (Neon Function)  --->  Postgres database (Neon)
 - Stars per level: 50% = 1 star, 70% = 2 stars, 90% = 3 stars.
 - One star unlocks the next level.
 - Playing on consecutive days builds a streak (days are counted in Nairobi time).
+- Multiple-choice options are shuffled every time, so the right answer moves around.
+
+## Content
+
+6 worlds, 61 levels and about 380 questions (OS, Computer Architecture, Web Dev, SQL,
+Data Structures, Networking). They live in the database, so more can be added without a new APK.
 
 ## Run it on your computer
 

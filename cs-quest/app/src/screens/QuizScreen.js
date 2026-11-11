@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { completeLevel, fetchQuestions, revealAnswer, submitAnswer } from '../api';
-import { ErrorView, LoadingView, PrimaryButton, ScreenHeader } from '../components';
+import { ErrorView, LoadingView, PrimaryButton, ProgressBar, ScreenHeader } from '../components';
 import { colors, spacing } from '../theme';
 
 export default function QuizScreen({ navigation, params }) {
@@ -50,6 +50,16 @@ export default function QuizScreen({ navigation, params }) {
   }
 
   const currentQuestion = questions[questionIndex];
+  // Shuffle the options once per question, so the right answer isn't always in the same spot.
+  const shuffledOptions = useMemo(() => {
+    if (!currentQuestion || currentQuestion.questionType !== 'multiple_choice') return [];
+    const optionsCopy = [...currentQuestion.options];
+    for (let position = optionsCopy.length - 1; position > 0; position--) {
+      const swapPosition = Math.floor(Math.random() * (position + 1));
+      [optionsCopy[position], optionsCopy[swapPosition]] = [optionsCopy[swapPosition], optionsCopy[position]];
+    }
+    return optionsCopy;
+  }, [currentQuestion]);
   const isLastQuestion = questionIndex === questions.length - 1;
 
   function recordVerdict(verdict) {
@@ -102,7 +112,7 @@ export default function QuizScreen({ navigation, params }) {
 
   function renderAnswerArea() {
     if (currentQuestion.questionType === 'multiple_choice') {
-      return currentQuestion.options.map((optionText) => {
+      return shuffledOptions.map((optionText, optionIndex) => {
         const isSelected = selectedOption === optionText;
         const isTheCorrectOne = feedback && optionText === feedback.correctAnswer;
         const isWrongPick = feedback && isSelected && !feedback.isCorrect;
@@ -118,6 +128,9 @@ export default function QuizScreen({ navigation, params }) {
               isWrongPick && styles.optionWrong,
             ]}
           >
+            <View style={[styles.optionLetterBadge, isSelected && styles.optionLetterSelected]}>
+              <Text style={styles.optionLetter}>{String.fromCharCode(65 + optionIndex)}</Text>
+            </View>
             <Text style={styles.optionText}>{optionText}</Text>
           </Pressable>
         );
@@ -189,16 +202,18 @@ export default function QuizScreen({ navigation, params }) {
     // KeyboardAvoidingView shrinks the screen when the keyboard opens,
     // so the Check button stays visible while typing an answer.
     <KeyboardAvoidingView style={styles.container} behavior="padding">
-      <ScreenHeader title={level.title} onBack={navigation.goBack} />
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${((questionIndex + (feedback ? 1 : 0)) / questions.length) * 100}%` }]} />
+      <ScreenHeader title={level.title} onBack={navigation.goBack} rightLabel={`⚡ ${xpEarnedThisRun}`} />
+      <View style={styles.progressWrapper}>
+        <ProgressBar ratio={(questionIndex + (feedback ? 1 : 0)) / questions.length} height={10} />
       </View>
 
       <ScrollView contentContainerStyle={styles.questionContent} keyboardShouldPersistTaps="handled">
         <Text style={styles.questionCounter}>
-          Question {questionIndex + 1} of {questions.length} · {currentQuestion.xpReward} XP
+          QUESTION {questionIndex + 1} OF {questions.length} · {currentQuestion.xpReward} XP
         </Text>
-        <Text style={styles.prompt}>{currentQuestion.prompt}</Text>
+        <View style={styles.promptCard}>
+          <Text style={styles.prompt}>{currentQuestion.prompt}</Text>
+        </View>
         {currentQuestion.codeSnippet ? (
           <ScrollView horizontal style={styles.codeBlock}>
             <Text style={styles.codeText}>{currentQuestion.codeSnippet}</Text>
@@ -214,25 +229,44 @@ export default function QuizScreen({ navigation, params }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  progressTrack: { height: 8, backgroundColor: colors.locked, marginHorizontal: spacing.medium, borderRadius: 4 },
-  progressFill: { height: 8, backgroundColor: colors.success, borderRadius: 4 },
-  questionContent: { padding: spacing.medium, gap: spacing.medium },
-  questionCounter: { color: colors.mutedText, fontSize: 13 },
-  prompt: { color: colors.text, fontSize: 20, fontWeight: '700', lineHeight: 28 },
+  progressWrapper: { marginHorizontal: spacing.medium },
+  questionContent: { padding: spacing.medium, gap: spacing.medium, paddingBottom: spacing.large * 2 },
+  questionCounter: { color: colors.gold, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  promptCard: {
+    backgroundColor: colors.card,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: spacing.medium,
+  },
+  prompt: { color: colors.text, fontSize: 19, fontWeight: '700', lineHeight: 27 },
   codeBlock: { backgroundColor: '#090b1a', borderRadius: 12, padding: spacing.medium },
   codeText: { color: '#c8ffd9', fontFamily: 'monospace', fontSize: 14, lineHeight: 20 },
   answerArea: { gap: spacing.small },
   optionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.medium,
     backgroundColor: colors.card,
     borderColor: colors.cardBorder,
     borderWidth: 2,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: spacing.medium,
   },
-  optionSelected: { borderColor: colors.primary },
+  optionLetterBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.locked,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionLetterSelected: { backgroundColor: colors.primary },
+  optionLetter: { color: colors.text, fontWeight: '900', fontSize: 15 },
+  optionSelected: { borderColor: colors.primary, backgroundColor: '#20245a' },
   optionCorrect: { borderColor: colors.success, backgroundColor: '#17402f' },
   optionWrong: { borderColor: colors.danger, backgroundColor: '#4a1c26' },
-  optionText: { color: colors.text, fontSize: 16 },
+  optionText: { color: colors.text, fontSize: 16, flex: 1 },
   answerInput: {
     backgroundColor: colors.card,
     borderColor: colors.cardBorder,

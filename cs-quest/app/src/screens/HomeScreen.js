@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { fetchPlayer, fetchWorlds } from '../api';
-import { ErrorView, LoadingView } from '../components';
+import { ErrorView, LoadingView, ProgressBar } from '../components';
 import { colors, spacing } from '../theme';
 
-const WORLD_ICONS = { os: '🖥️', arch: '⚙️', web: '🌐', sql: '🗄️', dsa: '⛰️' };
+const WORLD_ICONS = { os: '🖥️', arch: '⚙️', web: '🌐', sql: '🗄️', dsa: '⛰️', net: '📡' };
 
 export default function HomeScreen({ navigation }) {
   const [player, setPlayer] = useState(null);
@@ -49,23 +49,27 @@ export default function HomeScreen({ navigation }) {
         style={({ pressed }) => [styles.worldCard, pressed && styles.worldCardPressed]}
         onPress={() => navigation.push('World', { worldSlug: world.slug, worldTitle: world.title })}
       >
-        <Text style={styles.worldIcon}>{WORLD_ICONS[world.slug] ?? '📘'}</Text>
+        <View style={styles.worldIconCircle}>
+          <Text style={styles.worldIcon}>{WORLD_ICONS[world.slug] ?? '📘'}</Text>
+        </View>
         <View style={styles.worldInfo}>
           <View style={styles.worldTitleRow}>
-            <Text style={styles.worldTitle}>{world.title}</Text>
+            <Text style={styles.worldTitle} numberOfLines={1}>
+              {world.title}
+            </Text>
             {world.isNovemberPriority ? <Text style={styles.priorityBadge}>NOV</Text> : null}
           </View>
-          <Text style={styles.worldDescription}>{world.description}</Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progressRatio * 100}%` }]} />
-          </View>
+          <ProgressBar ratio={progressRatio} />
           <Text style={styles.worldProgressText}>
             {world.completedLevels}/{world.levelCount} levels · ⭐ {world.totalStars}
           </Text>
         </View>
+        <Text style={styles.worldPercent}>{Math.round(progressRatio * 100)}%</Text>
       </Pressable>
     );
   }
+
+  const playerInitial = (player.displayName || '?').trim().charAt(0).toUpperCase();
 
   return (
     <FlatList
@@ -76,7 +80,17 @@ export default function HomeScreen({ navigation }) {
       refreshControl={<RefreshControl refreshing={false} onRefresh={loadHomeData} tintColor={colors.primary} />}
       ListHeaderComponent={
         <View>
-          <Text style={styles.greeting}>Hi, {player.displayName} 👋</Text>
+          <View style={styles.profileRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarLetter}>{playerInitial}</Text>
+            </View>
+            <View style={styles.profileText}>
+              <Text style={styles.greeting} numberOfLines={1}>
+                Hey, {player.displayName}!
+              </Text>
+              <Text style={styles.tagline}>Learn. Play. Level up.</Text>
+            </View>
+          </View>
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>⚡ {player.totalXp}</Text>
@@ -91,7 +105,7 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.statLabel}>best streak</Text>
             </View>
           </View>
-          <Text style={styles.sectionTitle}>Worlds</Text>
+          <Text style={styles.sectionTitle}>Your Worlds</Text>
         </View>
       }
     />
@@ -99,45 +113,70 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  listContent: { padding: spacing.medium, gap: spacing.medium },
-  greeting: { color: colors.text, fontSize: 26, fontWeight: '800' },
+  listContent: { padding: spacing.medium, gap: spacing.small, paddingBottom: spacing.large * 2 },
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.medium },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    borderColor: colors.gold,
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarLetter: { color: colors.text, fontSize: 26, fontWeight: '900' },
+  profileText: { flex: 1 },
+  greeting: { color: colors.text, fontSize: 24, fontWeight: '900' },
+  tagline: { color: colors.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
   statsRow: { flexDirection: 'row', gap: spacing.small, marginTop: spacing.medium },
   statBox: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 14,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
+    borderRadius: 16,
     paddingVertical: spacing.medium,
     alignItems: 'center',
   },
   statValue: { color: colors.text, fontSize: 20, fontWeight: '800' },
   statLabel: { color: colors.mutedText, fontSize: 12, marginTop: 2 },
-  sectionTitle: { color: colors.text, fontSize: 20, fontWeight: '700', marginTop: spacing.large },
+  sectionTitle: { color: colors.text, fontSize: 20, fontWeight: '800', marginTop: spacing.large, marginBottom: spacing.small },
   worldCard: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.medium,
     backgroundColor: colors.card,
     borderColor: colors.cardBorder,
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: spacing.medium,
   },
   worldCardPressed: { opacity: 0.7 },
-  worldIcon: { fontSize: 36 },
-  worldInfo: { flex: 1 },
+  worldIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.background,
+    borderColor: colors.primary,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  worldIcon: { fontSize: 26 },
+  worldInfo: { flex: 1, gap: 6 },
   worldTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.small },
-  worldTitle: { color: colors.text, fontSize: 17, fontWeight: '700', flexShrink: 1 },
+  worldTitle: { color: colors.text, fontSize: 16, fontWeight: '800', flexShrink: 1 },
   priorityBadge: {
     color: colors.background,
     backgroundColor: colors.gold,
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '900',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
     overflow: 'hidden',
   },
-  worldDescription: { color: colors.mutedText, fontSize: 13, marginTop: 2 },
-  progressTrack: { height: 6, backgroundColor: colors.locked, borderRadius: 3, marginTop: spacing.small },
-  progressFill: { height: 6, backgroundColor: colors.success, borderRadius: 3 },
-  worldProgressText: { color: colors.mutedText, fontSize: 12, marginTop: 4 },
+  worldProgressText: { color: colors.mutedText, fontSize: 12 },
+  worldPercent: { color: colors.gold, fontSize: 16, fontWeight: '900' },
 });

@@ -3,12 +3,18 @@
     "name": "CS Quest",
     "slug": "cs-quest",
     "owner": "mashakifalu54s-team",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0f1226",
+    "icon": "./assets/icon.png",
     "android": {
-      "package": "com.timothymasha.csquest"
+      "package": "com.timothymasha.csquest",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-foreground.png",
+        "backgroundImage": "./assets/adaptive-background.png",
+        "backgroundColor": "#5a3fd6"
+      }
     },
     "plugins": ["expo-secure-store"],
     "extra": {

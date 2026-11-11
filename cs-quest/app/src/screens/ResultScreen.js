@@ -12,6 +12,7 @@ export default function ResultScreen({ navigation, params }) {
   return (
     <View style={styles.container}>
       <Text style={styles.trophy}>{passedLevel ? '🏆' : '💪'}</Text>
+      <Text style={styles.completeLabel}>{passedLevel ? 'LEVEL COMPLETE!' : 'NOT YET…'}</Text>
       <Text style={styles.headline}>{HEADLINES[levelResult.stars]}</Text>
       <Text style={styles.levelTitle}>{level.title}</Text>
       <StarRow stars={levelResult.stars} size={44} />
@@ -38,7 +39,7 @@ export default function ResultScreen({ navigation, params }) {
       ) : null}
 
       <View style={styles.buttons}>
-        <PrimaryButton label="Back to map" onPress={navigation.goBack} />
+        <PrimaryButton label="CONTINUE" variant="gold" onPress={navigation.goBack} />
         <PrimaryButton
           label="Try again"
           variant="ghost"
@@ -52,14 +53,17 @@ export default function ResultScreen({ navigation, params }) {
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.large, gap: spacing.small },
   trophy: { fontSize: 72 },
-  headline: { color: colors.text, fontSize: 30, fontWeight: '800' },
+  completeLabel: { color: colors.gold, fontSize: 14, fontWeight: '900', letterSpacing: 2 },
+  headline: { color: colors.text, fontSize: 32, fontWeight: '900' },
   levelTitle: { color: colors.mutedText, fontSize: 16, marginBottom: spacing.small },
   // alignSelf stretch: the parent centres its children, so without it the row shrinks and squeezes the boxes.
   statsRow: { flexDirection: 'row', alignSelf: 'stretch', gap: spacing.small, marginTop: spacing.large },
   statBox: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 14,
+    borderColor: colors.cardBorder,
+    borderWidth: 1,
+    borderRadius: 16,
     paddingVertical: spacing.medium,
     alignItems: 'center',
   },
