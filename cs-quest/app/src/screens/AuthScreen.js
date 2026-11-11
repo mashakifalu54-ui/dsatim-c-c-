@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInpu
 
 import { claimAccount, logIn, signUp } from '../api';
 import { PrimaryButton } from '../components';
+import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '../legal';
 import { playSound } from '../sound';
 import { colors, spacing } from '../theme';
 
@@ -23,10 +24,13 @@ export default function AuthScreen({ mode, onSwitchMode, onAuthenticated }) {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [hasAgreed, setHasAgreed] = useState(false);
+  const [legalView, setLegalView] = useState(null); // null | 'terms' | 'privacy'
 
   const screenText = SCREEN_TEXT[mode];
   const usernameLooksValid = /^[A-Za-z0-9_]{3,20}$/.test(username.trim());
-  const canSubmit = usernameLooksValid && password.length >= 6 && !isSubmitting;
+  const needsAgreement = mode !== 'login';
+  const canSubmit = usernameLooksValid && password.length >= 6 && !isSubmitting && (!needsAgreement || hasAgreed);
 
   async function handleSubmit() {
     setIsSubmitting(true);
@@ -46,6 +50,24 @@ export default function AuthScreen({ mode, onSwitchMode, onAuthenticated }) {
       setErrorMessage(error.message);
       setIsSubmitting(false);
     }
+  }
+
+  if (legalView) {
+    const sections = legalView === 'terms' ? TERMS_SECTIONS : PRIVACY_SECTIONS;
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.legalContent}>
+          <Text style={styles.heading}>{legalView === 'terms' ? 'Terms of Use' : 'Privacy Policy'}</Text>
+          {sections.map((section) => (
+            <View key={section.heading} style={styles.legalSection}>
+              <Text style={styles.legalHeading}>{section.heading}</Text>
+              <Text style={styles.legalBody}>{section.body}</Text>
+            </View>
+          ))}
+          <PrimaryButton label="BACK" variant="ghost" onPress={() => setLegalView(null)} />
+        </ScrollView>
+      </View>
+    );
   }
 
   return (
@@ -93,6 +115,31 @@ export default function AuthScreen({ mode, onSwitchMode, onAuthenticated }) {
           {mode !== 'login' ? (
             <Text style={styles.helper}>There is no password reset yet, so pick one you will remember.</Text>
           ) : null}
+
+          {needsAgreement ? (
+            <Pressable style={styles.agreeRow} onPress={() => setHasAgreed(!hasAgreed)} hitSlop={6}>
+              <View style={[styles.checkbox, hasAgreed && styles.checkboxChecked]}>
+                {hasAgreed ? <Text style={styles.checkmark}>✓</Text> : null}
+              </View>
+              <Text style={styles.agreeText}>
+                I agree to the{' '}
+                <Text style={styles.switchTextStrong} onPress={() => setLegalView('terms')}>
+                  Terms of Use
+                </Text>{' '}
+                and{' '}
+                <Text style={styles.switchTextStrong} onPress={() => setLegalView('privacy')}>
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.helper}>
+              By logging in you agree to the{' '}
+              <Text style={styles.switchTextStrong} onPress={() => setLegalView('terms')}>Terms</Text> and{' '}
+              <Text style={styles.switchTextStrong} onPress={() => setLegalView('privacy')}>Privacy Policy</Text>.
+            </Text>
+          )}
 
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
@@ -153,6 +200,24 @@ const styles = StyleSheet.create({
   showText: { color: colors.gold, fontWeight: '800' },
   helper: { color: colors.mutedText, fontSize: 12 },
   errorText: { color: colors.danger, textAlign: 'center', fontWeight: '700', marginVertical: spacing.small },
+  agreeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.small, marginTop: spacing.small },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkmark: { color: colors.text, fontWeight: '900' },
+  agreeText: { flex: 1, color: colors.mutedText, fontSize: 14, lineHeight: 20 },
+  legalContent: { padding: spacing.large, gap: spacing.medium, paddingTop: spacing.large * 2 },
+  legalSection: { gap: 4 },
+  legalHeading: { color: colors.gold, fontSize: 16, fontWeight: '900' },
+  legalBody: { color: colors.text, fontSize: 14, lineHeight: 21 },
   switchLink: { marginTop: spacing.large, alignItems: 'center' },
   switchText: { color: colors.mutedText, fontSize: 15 },
   switchTextStrong: { color: colors.gold, fontWeight: '900' },
