@@ -109,6 +109,10 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.statLabel}>best streak</Text>
             </View>
           </View>
+          <View style={styles.newBanner}>
+            <Text style={styles.newBannerTag}>NEW</Text>
+            <Text style={styles.newBannerText}>C# levels are now in Data Structure Peaks</Text>
+          </View>
           <Text style={styles.sectionTitle}>Your Worlds</Text>
         </View>
       }
@@ -133,6 +137,20 @@ const styles = StyleSheet.create({
   profileText: { flex: 1 },
   greeting: { color: colors.text, fontSize: 24, fontWeight: '900', marginBottom: 4 },
   tagline: { color: colors.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1, marginTop: 2 },
+  newBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.small,
+    backgroundColor: '#2a2160',
+    borderColor: colors.gold,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: spacing.small,
+    paddingHorizontal: spacing.medium,
+    marginTop: spacing.medium,
+  },
+  newBannerTag: { color: colors.background, backgroundColor: colors.gold, fontWeight: '900', fontSize: 12, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  newBannerText: { flex: 1, color: colors.text, fontWeight: '700', fontSize: 14 },
   statsRow: { flexDirection: 'row', gap: spacing.small, marginTop: spacing.medium },
   statBox: {
     flex: 1,
