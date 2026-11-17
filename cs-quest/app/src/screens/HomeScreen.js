@@ -111,7 +111,7 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={styles.newBanner}>
             <Text style={styles.newBannerTag}>NEW</Text>
-            <Text style={styles.newBannerText}>New world: Information Systems, up to Firewalls</Text>
+            <Text style={styles.newBannerText}>New world: Information Management Systems</Text>
           </View>
           <Text style={styles.sectionTitle}>Your Worlds</Text>
         </View>
