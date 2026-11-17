@@ -6,7 +6,7 @@ import { ErrorView, LoadingView, ProgressBar, RankBadge } from '../components';
 import { playSound } from '../sound';
 import { colors, spacing } from '../theme';
 
-export const WORLD_ICONS = { os: '🖥️', arch: '⚙️', web: '🌐', sql: '🗄️', dsa: '⛰️', net: '📡', maths: '📐' };
+export const WORLD_ICONS = { os: '🖥️', arch: '⚙️', web: '🌐', sql: '🗄️', dsa: '⛰️', net: '📡', maths: '📐', is: '🛡️' };
 
 export default function HomeScreen({ navigation }) {
   const [player, setPlayer] = useState(null);
@@ -111,7 +111,7 @@ export default function HomeScreen({ navigation }) {
           </View>
           <View style={styles.newBanner}>
             <Text style={styles.newBannerTag}>NEW</Text>
-            <Text style={styles.newBannerText}>C# levels are now in Data Structure Peaks</Text>
+            <Text style={styles.newBannerText}>New world: Information Systems, up to Firewalls</Text>
           </View>
           <Text style={styles.sectionTitle}>Your Worlds</Text>
         </View>

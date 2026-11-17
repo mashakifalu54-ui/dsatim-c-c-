@@ -6,6 +6,37 @@ import { ErrorView, LoadingView, PrimaryButton, ProgressBar, ScreenHeader } from
 import { playSound } from '../sound';
 import { colors, spacing } from '../theme';
 
+// Questions the player marks themselves: they write an answer, compare it with the model answer, then grade it.
+const SELF_GRADED_TYPES = {
+  find_bug: {
+    tag: '',
+    placeholder: 'Describe the bug in your own words…',
+    inputStyle: 'answerInputTall',
+    modelTitle: 'Model answer',
+    askText: 'Be honest — did you spot it?',
+    noLabel: 'I missed it',
+    yesLabel: 'I got it',
+  },
+  short_structured: {
+    tag: ' · SHORT ANSWER',
+    placeholder: 'Write your answer in a few clear sentences…',
+    inputStyle: 'answerInputTall',
+    modelTitle: 'Model answer',
+    askText: 'Compare with your answer. Did you cover the key points?',
+    noLabel: 'I missed points',
+    yesLabel: 'I covered it',
+  },
+  long_structured: {
+    tag: ' · LONG ANSWER',
+    placeholder: 'Answer each part in order: (a), (b), (c)…',
+    inputStyle: 'answerInputLong',
+    modelTitle: 'Marking guide',
+    askText: 'Mark yourself honestly. Did you earn at least half the marks?',
+    noLabel: 'Under half marks',
+    yesLabel: 'Half marks or more',
+  },
+};
+
 export default function QuizScreen({ navigation, params }) {
   const { level, worldSlug, worldTitle } = params;
 
@@ -142,22 +173,23 @@ export default function QuizScreen({ navigation, params }) {
       });
     }
 
-    const isFindBug = currentQuestion.questionType === 'find_bug';
+    const selfGradeConfig = SELF_GRADED_TYPES[currentQuestion.questionType];
+    const isWrittenAnswer = Boolean(selfGradeConfig);
     return (
       <TextInput
-        style={[styles.answerInput, isFindBug && styles.answerInputTall]}
-        placeholder={isFindBug ? 'Describe the bug in your own words…' : 'Type your answer'}
+        style={[styles.answerInput, isWrittenAnswer && styles[selfGradeConfig.inputStyle]]}
+        placeholder={isWrittenAnswer ? selfGradeConfig.placeholder : 'Type your answer'}
         placeholderTextColor={colors.mutedText}
         value={typedAnswer}
         onChangeText={setTypedAnswer}
         editable={feedback === null && revealedAnswer === null}
-        autoCapitalize="none"
+        autoCapitalize={isWrittenAnswer ? 'sentences' : 'none'}
         autoCorrect={false}
-        multiline={isFindBug}
-        returnKeyType={isFindBug ? 'default' : 'done'}
+        multiline={isWrittenAnswer}
+        returnKeyType={isWrittenAnswer ? 'default' : 'done'}
         // Pressing "done" on the keyboard checks a typed answer straight away.
         onSubmitEditing={() => {
-          if (!isFindBug && !isBusy && typedAnswer.trim().length > 0) handleCheckAnswer();
+          if (!isWrittenAnswer && !isBusy && typedAnswer.trim().length > 0) handleCheckAnswer();
         }}
       />
     );
@@ -170,28 +202,37 @@ export default function QuizScreen({ navigation, params }) {
           <Text style={styles.feedbackTitle}>
             {feedback.isCorrect ? `Correct!  +${feedback.xpEarned} XP` : 'Not quite'}
           </Text>
-          {!feedback.isCorrect ? <Text style={styles.feedbackText}>Answer: {feedback.correctAnswer}</Text> : null}
+          {!feedback.isCorrect && !SELF_GRADED_TYPES[currentQuestion.questionType] ? (
+            <Text style={styles.feedbackText}>Answer: {feedback.correctAnswer}</Text>
+          ) : null}
           {feedback.explanation ? <Text style={styles.feedbackText}>{feedback.explanation}</Text> : null}
           <PrimaryButton label={isLastQuestion ? 'Finish level' : 'Next'} onPress={handleNext} disabled={isBusy} />
         </View>
       );
     }
 
-    if (currentQuestion.questionType === 'find_bug') {
+    const selfGradeConfig = SELF_GRADED_TYPES[currentQuestion.questionType];
+    if (selfGradeConfig) {
       if (!revealedAnswer) {
-        return <PrimaryButton label="Show answer" onPress={handleRevealAnswer} disabled={isBusy} />;
+        return (
+          <PrimaryButton
+            label={selfGradeConfig.modelTitle === 'Marking guide' ? 'Show marking guide' : 'Show answer'}
+            onPress={handleRevealAnswer}
+            disabled={isBusy}
+          />
+        );
       }
       return (
         <View style={styles.selfGradePanel}>
-          <Text style={styles.feedbackTitle}>Model answer</Text>
+          <Text style={styles.feedbackTitle}>{selfGradeConfig.modelTitle}</Text>
           <Text style={styles.feedbackText}>{revealedAnswer.correctAnswer}</Text>
-          <Text style={styles.feedbackText}>Be honest — did you spot it?</Text>
+          <Text style={styles.feedbackText}>{selfGradeConfig.askText}</Text>
           <View style={styles.selfGradeButtons}>
             <View style={styles.selfGradeButton}>
-              <PrimaryButton label="I missed it" variant="danger" onPress={() => handleSelfGrade(false)} disabled={isBusy} />
+              <PrimaryButton label={selfGradeConfig.noLabel} variant="danger" onPress={() => handleSelfGrade(false)} disabled={isBusy} />
             </View>
             <View style={styles.selfGradeButton}>
-              <PrimaryButton label="I got it" variant="success" onPress={() => handleSelfGrade(true)} disabled={isBusy} />
+              <PrimaryButton label={selfGradeConfig.yesLabel} variant="success" onPress={() => handleSelfGrade(true)} disabled={isBusy} />
             </View>
           </View>
         </View>
@@ -214,7 +255,7 @@ export default function QuizScreen({ navigation, params }) {
 
       <ScrollView contentContainerStyle={styles.questionContent} keyboardShouldPersistTaps="handled">
         <Text style={styles.questionCounter}>
-          QUESTION {questionIndex + 1} OF {questions.length} · {currentQuestion.xpReward} XP
+          QUESTION {questionIndex + 1} OF {questions.length} · {currentQuestion.xpReward} XP{SELF_GRADED_TYPES[currentQuestion.questionType]?.tag ?? ''}
         </Text>
         <View style={styles.promptCard}>
           <Text style={styles.prompt}>{currentQuestion.prompt}</Text>
@@ -283,6 +324,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   answerInputTall: { minHeight: 90, textAlignVertical: 'top', fontSize: 15 },
+  answerInputLong: { minHeight: 260, textAlignVertical: 'top', fontSize: 15 },
   feedbackPanel: { borderRadius: 16, padding: spacing.medium, gap: spacing.small },
   feedbackCorrect: { backgroundColor: '#17402f' },
   feedbackWrong: { backgroundColor: '#4a1c26' },

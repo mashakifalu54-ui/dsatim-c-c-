@@ -8,6 +8,9 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 const NAIROBI_TODAY = "(now() AT TIME ZONE 'Africa/Nairobi')::date";
 const REPEAT_CORRECT_XP = 2;
 
+// Question types the player marks themselves: they compare their own answer with a model answer.
+const SELF_GRADED_TYPES = ['find_bug', 'short_structured', 'long_structured'];
+
 // Ranks are earned by completing levels (a level counts once you have at least 1 star).
 const RANKS = [
   { title: 'Rookie', icon: '🌱', minLevels: 0 },
@@ -399,12 +402,12 @@ async function listQuestions(levelId) {
 }
 
 async function revealAnswer(questionId) {
-  // Only "find the bug" questions can be revealed: the player compares
-  // their own explanation with the model answer and grades themselves.
+  // Only self-graded questions can be revealed: the player compares
+  // their own answer with the model answer and grades themselves.
   const questionRows = await runQuery(
     `SELECT correct_answer, explanation FROM questions
-      WHERE question_id = $1 AND question_type = 'find_bug'`,
-    [questionId],
+      WHERE question_id = $1 AND question_type = ANY(string_to_array($2, ','))`,
+    [questionId, SELF_GRADED_TYPES.join(',')],
   );
   if (questionRows.length === 0) throw new ApiError(404, 'Question cannot be revealed');
   return jsonResponse({
@@ -430,7 +433,7 @@ async function submitAnswer(player, request) {
 
   const givenAnswer = String(requestBody.givenAnswer ?? '').slice(0, 500);
   const isCorrect =
-    question.question_type === 'find_bug'
+    SELF_GRADED_TYPES.includes(question.question_type)
       ? requestBody.selfGradedCorrect === true
       : normalizeAnswer(givenAnswer) === normalizeAnswer(question.correct_answer);
 
